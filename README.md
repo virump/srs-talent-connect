@@ -30,11 +30,6 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
 =======
 # srs-talent-connect
 SRS-Talent-Connect (Skilling Resources Solution) is a dynamic platform designed to bridge the gap between aspiring talent and opportunity. Whether you're a student, recent graduate, or a professional looking to upskill, SRS-Talent-Connect offers access to internships, job openings, and career-focused courses all in one place.
