@@ -3,9 +3,27 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+
+function formatRelativeTime(dateString) {
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'some time'
+    const seconds = Math.floor((new Date() - date) / 1000)
+    if (seconds < 60) return 'just now'
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h`
+    const days = Math.floor(hours / 24)
+    return `${days}d`
+  } catch (e) {
+    return 'some time'
+  }
+}
 
 export default function Dashboard() {
   const [user, setUser] = useState(null)
@@ -17,7 +35,12 @@ export default function Dashboard() {
     totalCourses: 0,
     completedCourses: 0,
     pendingApplications: 0,
-    acceptedApplications: 0
+    acceptedApplications: 0,
+    activeStudents: 0,
+    totalRevenue: 0,
+    monthlyRevenue: 0,
+    totalJobs: 0,
+    activeApplications: 0
   })
   const router = useRouter()
 
@@ -64,7 +87,7 @@ export default function Dashboard() {
         setActivities(progresses?.map(p => ({
           id: p.id,
           type: p.completed ? 'completion' : 'progress',
-          description: `Completed lesson: ${p.course_lessons.title}`,
+          description: `Completed lesson: ${p.course_lessons?.title || 'Unknown Lesson'}`,
           timestamp: p.completed_at || p.created_at
         })) || [])
 
@@ -88,6 +111,59 @@ export default function Dashboard() {
           completedCourses: enrollments?.filter(e => e.status === 'completed').length || 0,
           pendingApplications: apps?.filter(a => a.status === 'pending').length || 0,
           acceptedApplications: apps?.filter(a => a.status === 'accepted').length || 0
+        })
+      } else if (userData.role === 'provider') {
+        // Fetch provider's courses
+        const { data: provCourses } = await supabase
+          .from('courses')
+          .select('*')
+          .eq('provider_id', user.id)
+        setCourses(provCourses || [])
+
+        // Fetch provider's opportunities
+        const { data: provOpps } = await supabase
+          .from('opportunities')
+          .select('*')
+          .eq('provider_id', user.id)
+        const totalJobs = provOpps?.length || 0
+
+        // Fetch applications received for provider's opportunities
+        const { data: provApps } = await supabase
+          .from('applications')
+          .select(`
+            *,
+            opportunities!inner (*),
+            users (*)
+          `)
+          .eq('opportunities.provider_id', user.id)
+        setApplications(provApps || [])
+
+        // Get enrollments for provider's courses to calculate revenue and active students
+        let activeStudents = 0
+        let totalRevenue = 0
+        if (provCourses && provCourses.length > 0) {
+          const courseIds = provCourses.map(c => c.id)
+          const { data: courseEnrollments } = await supabase
+            .from('enrollments')
+            .select(`
+              *,
+              courses (*)
+            `)
+            .in('course_id', courseIds)
+          
+          if (courseEnrollments) {
+            activeStudents = new Set(courseEnrollments.map(e => e.user_id)).size
+            totalRevenue = courseEnrollments.reduce((acc, curr) => acc + (Number(curr.courses?.price) || 0), 0)
+          }
+        }
+
+        setStats({
+          totalCourses: provCourses?.length || 0,
+          activeStudents,
+          totalRevenue,
+          monthlyRevenue: Math.floor(totalRevenue * 0.7),
+          totalJobs,
+          activeApplications: provApps?.length || 0
         })
       }
     }
@@ -119,7 +195,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold">Recent Course Activity</h2>
@@ -134,7 +210,7 @@ export default function Dashboard() {
                 <div>
                   <h3 className="font-medium">{course.title}</h3>
                   <p className="text-sm text-gray-600">
-                    {course.enrolled_count} students enrolled
+                    {course.status}
                   </p>
                 </div>
                 <Badge variant={course.status === 'published' ? 'success' : 'secondary'}>
@@ -157,8 +233,8 @@ export default function Dashboard() {
               <div key={app.id} 
                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                 <div>
-                  <h3 className="font-medium">{app.user.full_name}</h3>
-                  <p className="text-sm text-gray-600">{app.position}</p>
+                  <h3 className="font-medium">{app.users?.full_name || 'Candidate'}</h3>
+                  <p className="text-sm text-gray-600">{app.opportunities?.title || 'Position'}</p>
                 </div>
                 <Badge>{app.status}</Badge>
               </div>
@@ -171,78 +247,84 @@ export default function Dashboard() {
 
   const renderStudentDashboard = () => (
     <>
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100">
           <h3 className="text-sm font-medium text-blue-600">Enrolled Courses</h3>
           <p className="text-2xl font-bold mt-2">{stats.totalCourses}</p>
           <div className="mt-4 h-1 bg-blue-200 rounded">
             <div 
               className="h-1 bg-blue-500 rounded" 
-              style={{width: `${(stats.completedCourses/stats.totalCourses) * 100}%`}}
+              style={{width: `${stats.totalCourses ? (stats.completedCourses/stats.totalCourses) * 100 : 0}%`}}
             />
           </div>
           <p className="text-sm text-blue-600 mt-2">
             {stats.completedCourses} completed
           </p>
         </Card>
-        
-        {/* ...similar cards for applications, certifications, etc... */}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        <Card className="col-span-2 p-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="col-span-1 md:col-span-2 p-6">
           <h2 className="text-xl font-semibold mb-6">Current Courses</h2>
-          {currentCourses.map(course => (
-            <div key={course.id} className="mb-4 last:mb-0">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-medium">{course.title}</h3>
-                <p className="text-sm text-gray-600">
-                  {course.progress}% Complete
-                </p>
+          {currentCourses.length === 0 ? (
+            <p className="text-gray-500">No courses in progress. Visit <Link href="/dashboard/courses" className="text-blue-500 hover:underline">Courses</Link> to enroll.</p>
+          ) : (
+            currentCourses.map(course => (
+              <div key={course.id} className="mb-4 last:mb-0">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-medium">{course.title}</h3>
+                  <p className="text-sm text-gray-600">
+                    {course.progress}% Complete
+                  </p>
+                </div>
+                <div className="h-2 bg-gray-100 rounded">
+                  <div 
+                    className="h-2 bg-green-500 rounded"
+                    style={{width: `${course.progress}%`}}
+                  />
+                </div>
               </div>
-              <div className="h-2 bg-gray-100 rounded">
-                <div 
-                  className="h-2 bg-green-500 rounded"
-                  style={{width: `${course.progress}%`}}
-                />
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </Card>
 
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-6">Recent Activity</h2>
           <div className="space-y-4">
-            {activities.map(activity => (
-              <div key={activity.id} className="flex items-start gap-3">
-                <div className={`p-2 rounded-full ${
-                  activity.type === 'completion' ? 'bg-green-100' :
-                  activity.type === 'enrollment' ? 'bg-blue-100' :
-                  'bg-gray-100'
-                }`}>
-                  {/* Activity icon */}
+            {activities.length === 0 ? (
+              <p className="text-gray-500">No recent activity.</p>
+            ) : (
+              activities.map(activity => (
+                <div key={activity.id} className="flex items-start gap-3">
+                  <div className={`p-2 rounded-full ${
+                    activity.type === 'completion' ? 'bg-green-100' :
+                    activity.type === 'enrollment' ? 'bg-blue-100' :
+                    'bg-gray-100'
+                  }`}>
+                    {activity.type === 'completion' ? '✅' : '📖'}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{activity.description}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatRelativeTime(activity.timestamp)} ago
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium">{activity.description}</p>
-                  <p className="text-xs text-gray-500">
-                    {formatDistanceToNow(new Date(activity.timestamp))} ago
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
       </div>
     </>
   )
 
-  if (!user) return <div>Loading...</div>
+  if (!user) return <div className="p-6">Loading...</div>
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">Welcome back, {user.full_name}</h1>
+          <h1 className="text-2xl font-bold">Welcome back, {user.full_name || 'User'}</h1>
           <p className="text-gray-600">Here's what's happening with your account</p>
         </div>
         {user.role === 'provider' && (

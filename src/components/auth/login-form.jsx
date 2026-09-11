@@ -39,6 +39,7 @@ export function LoginForm({ onSuccess, onRegisterClick }) {
         }
 
         router.push('/dashboard')
+        onSuccess?.()
       }
     } catch (error) {
       setError(error.message)
@@ -49,8 +50,7 @@ export function LoginForm({ onSuccess, onRegisterClick }) {
   }
 
   return (
-    <div className="p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-center">Welcome Back</h2>
+    <div className="w-full">
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded">

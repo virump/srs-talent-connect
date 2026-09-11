@@ -22,7 +22,7 @@ export function CourseDialog({ course, isOpen, onClose }) {
         .select('*')
         .eq('course_id', course.id)
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
       setIsEnrolled(!!data)
     }
   }

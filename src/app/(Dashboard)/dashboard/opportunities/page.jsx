@@ -12,12 +12,14 @@ import {
 } from "@/components/ui/select"
 import { supabase } from '@/lib/supabaseClient'
 import { Badge } from "@/components/ui/badge"
+import { useRouter } from 'next/navigation'
 
 export default function OpportunitiesPage() {
   const [opportunities, setOpportunities] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [type, setType] = useState('all')
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     fetchOpportunities()

@@ -7,7 +7,7 @@ import { Toaster } from '@/components/ui/toaster'  // Update import path
 import { Inter } from 'next/font/google'
 
 const Navbar = dynamic(
-  () => import('@/components/layout/navbar').then(mod => mod.Navbar),
+  () => import('@/components/layout/navbar').then(mod => ({ default: mod.Navbar })),
   { ssr: false }
 );
 
