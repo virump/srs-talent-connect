@@ -185,7 +185,7 @@ export function CourseDialog({ course, isOpen, onClose }) {
 
           {isEnrolled ? (
             <Button variant="outline" size="lg" asChild>
-              <Link href={`/dashboard/courses/${course.id}`}>Go to course</Link>
+              <Link href="/dashboard/courses">Go to course</Link>
             </Button>
           ) : (
             <Button

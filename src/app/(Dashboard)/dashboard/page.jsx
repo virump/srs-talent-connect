@@ -408,9 +408,12 @@ export default function Dashboard() {
           ) : (
             <ul className="space-y-2">
               {courses.slice(0, 5).map((course) => (
+                // Links point at the catalogue because the course detail
+                // route was removed on main; restore per-course links if it
+                // comes back.
                 <li key={course.id}>
                   <Link
-                    href={`/dashboard/courses/${course.id}`}
+                    href="/dashboard/courses"
                     className="flex items-center justify-between gap-4 rounded-lg border border-transparent p-3 transition-all duration-200 hover:border-border hover:bg-accent/50"
                   >
                     <div className="min-w-0">
@@ -556,7 +559,7 @@ export default function Dashboard() {
             <ul className="space-y-5">
               {inProgressCourses.map((course) => (
                 <li key={course.id} className="group">
-                  <Link href={`/dashboard/courses/${course.id}`} className="block">
+                  <Link href="/dashboard/courses" className="block">
                     <div className="mb-2 flex items-baseline justify-between gap-3">
                       <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">
                         {course.title}
