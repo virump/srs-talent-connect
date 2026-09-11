@@ -66,7 +66,7 @@ export function RegisterForm({ onSuccess, onLoginClick }) {
     <div className="w-full">
       <form onSubmit={handleRegister} className="space-y-4">
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
             {error}
           </div>
         )}
@@ -103,7 +103,7 @@ export function RegisterForm({ onSuccess, onLoginClick }) {
           {loading ? 'Registering...' : 'Register'}
         </Button>
       </form>
-      <div className="mt-4 text-center text-sm text-gray-600">
+      <div className="mt-4 text-center text-sm text-muted-foreground">
         Already have an account?{' '}
         <button
           type="button"

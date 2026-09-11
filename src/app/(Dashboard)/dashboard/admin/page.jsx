@@ -78,19 +78,19 @@ export default function AdminDashboard() {
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
-          <h3 className="font-semibold text-gray-600">Total Students</h3>
+          <h3 className="font-semibold text-muted-foreground">Total Students</h3>
           <p className="text-2xl font-bold mt-2">{stats.totalStudents}</p>
         </Card>
         <Card className="p-4">
-          <h3 className="font-semibold text-gray-600">Total Providers</h3>
+          <h3 className="font-semibold text-muted-foreground">Total Providers</h3>
           <p className="text-2xl font-bold mt-2">{stats.totalProviders}</p>
         </Card>
         <Card className="p-4">
-          <h3 className="font-semibold text-gray-600">Total Courses</h3>
+          <h3 className="font-semibold text-muted-foreground">Total Courses</h3>
           <p className="text-2xl font-bold mt-2">{stats.totalCourses}</p>
         </Card>
         <Card className="p-4">
-          <h3 className="font-semibold text-gray-600">Total Enrollments</h3>
+          <h3 className="font-semibold text-muted-foreground">Total Enrollments</h3>
           <p className="text-2xl font-bold mt-2">{stats.totalEnrollments}</p>
         </Card>
       </div>
@@ -100,15 +100,15 @@ export default function AdminDashboard() {
           <h2 className="text-xl font-semibold mb-4">Recent Users</h2>
           <div className="space-y-3">
             {users.length === 0 ? (
-              <p className="text-gray-500">No users found.</p>
+              <p className="text-muted-foreground">No users found.</p>
             ) : (
               users.map(user => (
-                <div key={user.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div key={user.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                   <div>
                     <p className="font-semibold">{user.full_name || 'Anonymous User'}</p>
-                    <p className="text-sm text-gray-500">{user.email} ({user.role})</p>
+                    <p className="text-sm text-muted-foreground">{user.email} ({user.role})</p>
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-muted-foreground">
                     {new Date(user.created_at).toLocaleDateString()}
                   </div>
                 </div>
@@ -121,13 +121,13 @@ export default function AdminDashboard() {
           <h2 className="text-xl font-semibold mb-4">Recent Courses</h2>
           <div className="space-y-3">
             {courses.length === 0 ? (
-              <p className="text-gray-500">No courses found.</p>
+              <p className="text-muted-foreground">No courses found.</p>
             ) : (
               courses.map(course => (
-                <div key={course.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div key={course.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                   <div>
                     <p className="font-semibold">{course.title}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       by {course.users?.full_name || 'Unknown Provider'}
                     </p>
                   </div>
