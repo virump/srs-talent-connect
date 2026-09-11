@@ -1,345 +1,694 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import Link from 'next/link'
-import { Plus } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 
-function formatRelativeTime(dateString) {
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'some time'
-    const seconds = Math.floor((new Date() - date) / 1000)
-    if (seconds < 60) return 'just now'
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h`
-    const days = Math.floor(hours / 24)
-    return `${days}d`
-  } catch (e) {
-    return 'some time'
-  }
+import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import {
+  Activity,
+  ArrowRight,
+  BadgeCheck,
+  BookOpen,
+  Briefcase,
+  CheckCircle2,
+  Clock,
+  DollarSign,
+  FileText,
+  GraduationCap,
+  Plus,
+  Sparkles,
+  Users,
+} from 'lucide-react'
+
+import { supabase } from '@/lib/supabaseClient'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { StatusBadge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { StatCard } from '@/components/ui/stat-card'
+import { Avatar } from '@/components/ui/avatar'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Skeleton, SkeletonText } from '@/components/ui/skeleton'
+import { formatCurrency, formatRelativeTime, percentage } from '@/lib/utils'
+
+/** Section shell so every panel on the page shares one header treatment. */
+function Panel({ title, description, action, children, className }) {
+  return (
+    <Card className={className}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
+        <div>
+          <h2 className="font-semibold">{title}</h2>
+          {description && (
+            <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+          )}
+        </div>
+        {action}
+      </div>
+      <div className="p-5">{children}</div>
+    </Card>
+  )
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Skeleton shape="text" className="h-8 w-72" />
+        <Skeleton shape="text" className="w-56" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-[9.5rem]" />
+        ))}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-xl border bg-card p-5 lg:col-span-2">
+          <Skeleton shape="text" className="h-5 w-40" />
+          <div className="mt-6 space-y-5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton shape="text" className="w-1/2" />
+                <Skeleton className="h-2 w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card p-5">
+          <Skeleton shape="text" className="h-5 w-32" />
+          <div className="mt-6">
+            <SkeletonText lines={5} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function Dashboard() {
   const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
   const [courses, setCourses] = useState([])
   const [applications, setApplications] = useState([])
-  const [currentCourses, setCurrentCourses] = useState([])
   const [activities, setActivities] = useState([])
+  const [opportunities, setOpportunities] = useState([])
   const [stats, setStats] = useState({
     totalCourses: 0,
     completedCourses: 0,
     pendingApplications: 0,
     acceptedApplications: 0,
+    lessonsCompleted: 0,
     activeStudents: 0,
     totalRevenue: 0,
-    monthlyRevenue: 0,
     totalJobs: 0,
-    activeApplications: 0
+    activeApplications: 0,
   })
+
   const router = useRouter()
 
-  useEffect(() => {
-    fetchUserData()
-  }, [])
+  /**
+   * Real per-course progress: completed lessons over total lessons.
+   * The previous implementation used Math.random(), so the bars changed on
+   * every render and meant nothing.
+   */
+  const loadStudentData = useCallback(async (userId) => {
+    const { data: enrollments, error: enrollmentError } = await supabase
+      .from('enrollments')
+      .select('*, courses (*)')
+      .eq('user_id', userId)
 
-  const fetchUserData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-      setUser(userData)
+    if (enrollmentError) throw enrollmentError
 
-      // Fetch courses based on role
-      if (userData.role === 'student') {
-        const { data: enrollments } = await supabase
-          .from('enrollments')
-          .select(`
-            *,
-            courses (*)
-          `)
-          .eq('user_id', user.id)
-        
-        const coursesData = enrollments?.map(e => ({
-          ...e.courses,
-          progress: Math.floor(Math.random() * 100) // Temporary: Replace with actual progress
-        })) || []
-        
-        setCourses(coursesData)
-        setCurrentCourses(coursesData.filter(c => c.progress < 100))
+    const enrolled = (enrollments ?? []).filter((e) => e.courses)
+    const courseIds = enrolled.map((e) => e.courses.id)
 
-        // Fetch activities
-        const { data: progresses } = await supabase
-          .from('user_progress')
-          .select('*, course_lessons(*)')
-          .eq('user_id', user.id)
-          .order('completed_at', { ascending: false })
-          .limit(5)
+    // Map lessons -> course so progress can be computed per course.
+    let lessonToCourse = new Map()
+    if (courseIds.length > 0) {
+      const { data: modules } = await supabase
+        .from('course_modules')
+        .select('id, course_id')
+        .in('course_id', courseIds)
 
-        setActivities(progresses?.map(p => ({
-          id: p.id,
-          type: p.completed ? 'completion' : 'progress',
-          description: `Completed lesson: ${p.course_lessons?.title || 'Unknown Lesson'}`,
-          timestamp: p.completed_at || p.created_at
-        })) || [])
+      const moduleIds = (modules ?? []).map((m) => m.id)
+      const moduleToCourse = new Map((modules ?? []).map((m) => [m.id, m.course_id]))
 
-        // Fetch applications
-        const { data: apps } = await supabase
-          .from('applications')
-          .select(`
-            *,
-            opportunities (
-              title,
-              company_name,
-              type
-            )
-          `)
-          .eq('user_id', user.id)
-        setApplications(apps || [])
+      if (moduleIds.length > 0) {
+        const { data: lessons } = await supabase
+          .from('course_lessons')
+          .select('id, module_id')
+          .in('module_id', moduleIds)
 
-        // Calculate stats
-        setStats({
-          totalCourses: enrollments?.length || 0,
-          completedCourses: enrollments?.filter(e => e.status === 'completed').length || 0,
-          pendingApplications: apps?.filter(a => a.status === 'pending').length || 0,
-          acceptedApplications: apps?.filter(a => a.status === 'accepted').length || 0
-        })
-      } else if (userData.role === 'provider') {
-        // Fetch provider's courses
-        const { data: provCourses } = await supabase
-          .from('courses')
-          .select('*')
-          .eq('provider_id', user.id)
-        setCourses(provCourses || [])
-
-        // Fetch provider's opportunities
-        const { data: provOpps } = await supabase
-          .from('opportunities')
-          .select('*')
-          .eq('provider_id', user.id)
-        const totalJobs = provOpps?.length || 0
-
-        // Fetch applications received for provider's opportunities
-        const { data: provApps } = await supabase
-          .from('applications')
-          .select(`
-            *,
-            opportunities!inner (*),
-            users (*)
-          `)
-          .eq('opportunities.provider_id', user.id)
-        setApplications(provApps || [])
-
-        // Get enrollments for provider's courses to calculate revenue and active students
-        let activeStudents = 0
-        let totalRevenue = 0
-        if (provCourses && provCourses.length > 0) {
-          const courseIds = provCourses.map(c => c.id)
-          const { data: courseEnrollments } = await supabase
-            .from('enrollments')
-            .select(`
-              *,
-              courses (*)
-            `)
-            .in('course_id', courseIds)
-          
-          if (courseEnrollments) {
-            activeStudents = new Set(courseEnrollments.map(e => e.user_id)).size
-            totalRevenue = courseEnrollments.reduce((acc, curr) => acc + (Number(curr.courses?.price) || 0), 0)
-          }
-        }
-
-        setStats({
-          totalCourses: provCourses?.length || 0,
-          activeStudents,
-          totalRevenue,
-          monthlyRevenue: Math.floor(totalRevenue * 0.7),
-          totalJobs,
-          activeApplications: provApps?.length || 0
-        })
+        lessonToCourse = new Map(
+          (lessons ?? []).map((l) => [l.id, moduleToCourse.get(l.module_id)])
+        )
       }
     }
+
+    const { data: progressRows } = await supabase
+      .from('user_progress')
+      .select('id, lesson_id, completed, completed_at, course_lessons (title)')
+      .eq('user_id', userId)
+      .order('completed_at', { ascending: false, nullsFirst: false })
+
+    const completedByCourse = new Map()
+    const totalByCourse = new Map()
+
+    lessonToCourse.forEach((courseId) => {
+      totalByCourse.set(courseId, (totalByCourse.get(courseId) ?? 0) + 1)
+    })
+
+    ;(progressRows ?? []).forEach((row) => {
+      if (!row.completed) return
+      const courseId = lessonToCourse.get(row.lesson_id)
+      if (!courseId) return
+      completedByCourse.set(courseId, (completedByCourse.get(courseId) ?? 0) + 1)
+    })
+
+    const coursesData = enrolled.map((enrollment) => {
+      const course = enrollment.courses
+      const totalLessons = totalByCourse.get(course.id) ?? 0
+      const completedLessons = completedByCourse.get(course.id) ?? 0
+      return {
+        ...course,
+        enrollmentStatus: enrollment.status,
+        totalLessons,
+        completedLessons,
+        progress:
+          enrollment.status === 'completed'
+            ? 100
+            : percentage(completedLessons, totalLessons),
+      }
+    })
+
+    setCourses(coursesData)
+
+    setActivities(
+      (progressRows ?? [])
+        .filter((row) => row.completed_at)
+        .slice(0, 6)
+        .map((row) => ({
+          id: row.id,
+          type: row.completed ? 'completion' : 'progress',
+          description: row.course_lessons?.title
+            ? `Completed lesson: ${row.course_lessons.title}`
+            : 'Lesson progress updated',
+          timestamp: row.completed_at,
+        }))
+    )
+
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('*, opportunities (title, company_name, type)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    setApplications(apps ?? [])
+
+    setStats((prev) => ({
+      ...prev,
+      totalCourses: enrolled.length,
+      completedCourses: enrolled.filter((e) => e.status === 'completed').length,
+      lessonsCompleted: (progressRows ?? []).filter((r) => r.completed).length,
+      pendingApplications: (apps ?? []).filter((a) => a.status === 'pending').length,
+      acceptedApplications: (apps ?? []).filter((a) => a.status === 'accepted').length,
+    }))
+  }, [])
+
+  /**
+   * The provider branch previously fetched nothing at all, so every provider
+   * stat rendered as `undefined` (and "$undefined" for revenue).
+   */
+  const loadProviderData = useCallback(async (userId) => {
+    const { data: providerCourses, error: courseError } = await supabase
+      .from('courses')
+      .select('*, enrollments (id, status)')
+      .eq('provider_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (courseError) throw courseError
+
+    const withCounts = (providerCourses ?? []).map((course) => ({
+      ...course,
+      enrolledCount: course.enrollments?.length ?? 0,
+    }))
+    setCourses(withCounts)
+
+    const { data: providerOpportunities } = await supabase
+      .from('opportunities')
+      .select('*, applications (id, status)')
+      .eq('provider_id', userId)
+      .order('created_at', { ascending: false })
+
+    const opportunitiesData = (providerOpportunities ?? []).map((opp) => ({
+      ...opp,
+      applicationCount: opp.applications?.length ?? 0,
+    }))
+    setOpportunities(opportunitiesData)
+
+    // Applications across all of this provider's opportunities.
+    const opportunityIds = opportunitiesData.map((o) => o.id)
+    let providerApplications = []
+    if (opportunityIds.length > 0) {
+      const { data: apps } = await supabase
+        .from('applications')
+        .select(
+          '*, users!applications_user_id_fkey (full_name, avatar_url), opportunities (title, type)'
+        )
+        .in('opportunity_id', opportunityIds)
+        .order('created_at', { ascending: false })
+      providerApplications = apps ?? []
+    }
+    setApplications(providerApplications)
+
+    const totalEnrollments = withCounts.reduce((sum, c) => sum + c.enrolledCount, 0)
+    const totalRevenue = withCounts.reduce(
+      (sum, c) => sum + (Number(c.price) || 0) * c.enrolledCount,
+      0
+    )
+
+    setStats((prev) => ({
+      ...prev,
+      totalCourses: withCounts.length,
+      publishedCourses: withCounts.filter((c) => c.status === 'published').length,
+      activeStudents: totalEnrollments,
+      totalRevenue,
+      totalJobs: opportunitiesData.length,
+      activeApplications: providerApplications.filter((a) => a.status === 'pending').length,
+    }))
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const run = async () => {
+      try {
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser()
+
+        if (!authUser) {
+          router.push('/auth/login')
+          return
+        }
+
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', authUser.id)
+          .maybeSingle()
+
+        if (userError) throw userError
+        if (cancelled) return
+
+        setUser(userData)
+
+        if (userData?.role === 'provider' || userData?.role === 'admin') {
+          await loadProviderData(authUser.id)
+        } else {
+          await loadStudentData(authUser.id)
+        }
+      } catch (err) {
+        console.error('Error loading dashboard:', err)
+        if (!cancelled) setError(err.message ?? 'Something went wrong')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [router, loadProviderData, loadStudentData])
+
+  if (loading) return <DashboardSkeleton />
+
+  if (error) {
+    return (
+      <EmptyState
+        icon={Activity}
+        title="We couldn't load your dashboard"
+        description={error}
+        action={
+          <Button variant="brand" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        }
+      />
+    )
   }
 
-  const renderProviderDashboard = () => (
+  const isProvider = user?.role === 'provider' || user?.role === 'admin'
+  const inProgressCourses = courses.filter((c) => (c.progress ?? 0) < 100)
+
+  /* ── Provider view ─────────────────────────────────────────── */
+  const providerView = (
     <>
-      <div className="flex gap-4 mb-8">
-        <Card className="flex-1 bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6">
-          <h3 className="font-medium text-blue-100">Total Courses</h3>
-          <p className="text-3xl font-bold mt-2">{stats.totalCourses}</p>
-          <p className="text-sm text-blue-100 mt-4">
-            {stats.activeStudents} Active Students
-          </p>
-        </Card>
-        <Card className="flex-1 bg-gradient-to-br from-green-500 to-green-600 text-white p-6">
-          <h3 className="font-medium text-green-100">Total Revenue</h3>
-          <p className="text-3xl font-bold mt-2">${stats.totalRevenue}</p>
-          <p className="text-sm text-green-100 mt-4">
-            This Month: ${stats.monthlyRevenue}
-          </p>
-        </Card>
-        <Card className="flex-1 bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6">
-          <h3 className="font-medium text-purple-100">Job Postings</h3>
-          <p className="text-3xl font-bold mt-2">{stats.totalJobs}</p>
-          <p className="text-sm text-purple-100 mt-4">
-            {stats.activeApplications} Active Applications
-          </p>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Total courses"
+          value={stats.totalCourses}
+          icon={BookOpen}
+          tone="brand"
+          hint={`${stats.publishedCourses ?? 0} published`}
+        />
+        <StatCard
+          label="Enrolled students"
+          value={stats.activeStudents}
+          icon={Users}
+          tone="info"
+          hint="Across all your courses"
+        />
+        <StatCard
+          label="Total revenue"
+          value={stats.totalRevenue}
+          prefix="$"
+          icon={DollarSign}
+          tone="success"
+          hint="Price × enrollments"
+        />
+        <StatCard
+          label="Open postings"
+          value={stats.totalJobs}
+          icon={Briefcase}
+          tone="warning"
+          hint={`${stats.activeApplications} pending applications`}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Recent Course Activity</h2>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/dashboard/courses">View All</Link>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel
+          title="Your courses"
+          description="Enrollment activity at a glance"
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/courses">
+                View all
+                <ArrowRight />
+              </Link>
             </Button>
-          </div>
-          <div className="space-y-4">
-            {courses.slice(0, 5).map(course => (
-              <div key={course.id} 
-                   className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <div>
-                  <h3 className="font-medium">{course.title}</h3>
-                  <p className="text-sm text-gray-600">
-                    {course.status}
-                  </p>
-                </div>
-                <Badge variant={course.status === 'published' ? 'success' : 'secondary'}>
-                  {course.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
+          }
+        >
+          {courses.length === 0 ? (
+            <EmptyState
+              icon={BookOpen}
+              title="No courses yet"
+              description="Publish your first course to start reaching learners."
+              action={
+                <Button variant="brand" asChild>
+                  <Link href="/dashboard/courses/create">
+                    <Plus />
+                    Create course
+                  </Link>
+                </Button>
+              }
+              className="border-0 bg-transparent py-8"
+            />
+          ) : (
+            <ul className="space-y-2">
+              {courses.slice(0, 5).map((course) => (
+                <li key={course.id}>
+                  <Link
+                    href={`/dashboard/courses/${course.id}`}
+                    className="flex items-center justify-between gap-4 rounded-lg border border-transparent p-3 transition-all duration-200 hover:border-border hover:bg-accent/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{course.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {course.enrolledCount} enrolled · {formatCurrency(course.price)}
+                      </p>
+                    </div>
+                    <StatusBadge status={course.status} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
 
-        <Card className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Recent Applications</h2>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/dashboard/opportunities">View All</Link>
+        <Panel
+          title="Recent applications"
+          description="People applying to your postings"
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/opportunities">
+                View all
+                <ArrowRight />
+              </Link>
             </Button>
-          </div>
-          <div className="space-y-4">
-            {applications.slice(0, 5).map(app => (
-              <div key={app.id} 
-                   className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <div>
-                  <h3 className="font-medium">{app.users?.full_name || 'Candidate'}</h3>
-                  <p className="text-sm text-gray-600">{app.opportunities?.title || 'Position'}</p>
-                </div>
-                <Badge>{app.status}</Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
+          }
+        >
+          {applications.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="No applications yet"
+              description="Post a job or internship to start receiving applications."
+              action={
+                <Button variant="brand" asChild>
+                  <Link href="/dashboard/opportunities/create">
+                    <Plus />
+                    Post opportunity
+                  </Link>
+                </Button>
+              }
+              className="border-0 bg-transparent py-8"
+            />
+          ) : (
+            <ul className="space-y-2">
+              {applications.slice(0, 5).map((app) => (
+                <li
+                  key={app.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-transparent p-3 transition-colors hover:border-border hover:bg-accent/50"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar name={app.users?.full_name || 'Applicant'} size="sm" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {app.users?.full_name ?? 'Applicant'}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {app.opportunities?.title ?? 'Opportunity'}
+                      </p>
+                    </div>
+                  </div>
+                  <StatusBadge status={app.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
       </div>
     </>
   )
 
-  const renderStudentDashboard = () => (
+  /* ── Student view ──────────────────────────────────────────── */
+  const studentView = (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100">
-          <h3 className="text-sm font-medium text-blue-600">Enrolled Courses</h3>
-          <p className="text-2xl font-bold mt-2">{stats.totalCourses}</p>
-          <div className="mt-4 h-1 bg-blue-200 rounded">
-            <div 
-              className="h-1 bg-blue-500 rounded" 
-              style={{width: `${stats.totalCourses ? (stats.completedCourses/stats.totalCourses) * 100 : 0}%`}}
-            />
-          </div>
-          <p className="text-sm text-blue-600 mt-2">
-            {stats.completedCourses} completed
-          </p>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Enrolled courses"
+          value={stats.totalCourses}
+          icon={BookOpen}
+          tone="brand"
+          progress={percentage(stats.completedCourses, stats.totalCourses)}
+          progressLabel={`${stats.completedCourses} completed`}
+        />
+        <StatCard
+          label="Lessons completed"
+          value={stats.lessonsCompleted}
+          icon={CheckCircle2}
+          tone="success"
+          hint="Keep the streak going"
+        />
+        <StatCard
+          label="Pending applications"
+          value={stats.pendingApplications}
+          icon={Clock}
+          tone="warning"
+          hint="Awaiting a response"
+        />
+        <StatCard
+          label="Offers accepted"
+          value={stats.acceptedApplications}
+          icon={BadgeCheck}
+          tone="info"
+          hint="Congratulations!"
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="col-span-1 md:col-span-2 p-6">
-          <h2 className="text-xl font-semibold mb-6">Current Courses</h2>
-          {currentCourses.length === 0 ? (
-            <p className="text-gray-500">No courses in progress. Visit <Link href="/dashboard/courses" className="text-blue-500 hover:underline">Courses</Link> to enroll.</p>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Panel
+          title="Current courses"
+          description="Pick up where you left off"
+          className="lg:col-span-2"
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/courses">
+                Browse
+                <ArrowRight />
+              </Link>
+            </Button>
+          }
+        >
+          {inProgressCourses.length === 0 ? (
+            <EmptyState
+              icon={GraduationCap}
+              title={
+                courses.length === 0 ? 'You are not enrolled yet' : 'All caught up!'
+              }
+              description={
+                courses.length === 0
+                  ? 'Find a course that matches where you want to go next.'
+                  : 'You have completed every course you are enrolled in.'
+              }
+              action={
+                <Button variant="brand" asChild>
+                  <Link href="/dashboard/courses">
+                    <Sparkles />
+                    Explore courses
+                  </Link>
+                </Button>
+              }
+              className="border-0 bg-transparent py-8"
+            />
           ) : (
-            currentCourses.map(course => (
-              <div key={course.id} className="mb-4 last:mb-0">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-medium">{course.title}</h3>
-                  <p className="text-sm text-gray-600">
-                    {course.progress}% Complete
-                  </p>
-                </div>
-                <div className="h-2 bg-gray-100 rounded">
-                  <div 
-                    className="h-2 bg-green-500 rounded"
-                    style={{width: `${course.progress}%`}}
-                  />
-                </div>
-              </div>
-            ))
+            <ul className="space-y-5">
+              {inProgressCourses.map((course) => (
+                <li key={course.id} className="group">
+                  <Link href={`/dashboard/courses/${course.id}`} className="block">
+                    <div className="mb-2 flex items-baseline justify-between gap-3">
+                      <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">
+                        {course.title}
+                      </p>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {course.totalLessons > 0
+                          ? `${course.completedLessons}/${course.totalLessons} lessons`
+                          : 'No lessons yet'}
+                      </span>
+                    </div>
+                    <Progress
+                      value={course.progress}
+                      variant={course.progress >= 100 ? 'success' : 'brand'}
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
-        </Card>
+        </Panel>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-6">Recent Activity</h2>
-          <div className="space-y-4">
-            {activities.length === 0 ? (
-              <p className="text-gray-500">No recent activity.</p>
-            ) : (
-              activities.map(activity => (
-                <div key={activity.id} className="flex items-start gap-3">
-                  <div className={`p-2 rounded-full ${
-                    activity.type === 'completion' ? 'bg-green-100' :
-                    activity.type === 'enrollment' ? 'bg-blue-100' :
-                    'bg-gray-100'
-                  }`}>
-                    {activity.type === 'completion' ? '✅' : '📖'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{activity.description}</p>
-                    <p className="text-xs text-gray-500">
-                      {formatRelativeTime(activity.timestamp)} ago
+        <Panel title="Recent activity">
+          {activities.length === 0 ? (
+            <EmptyState
+              icon={Activity}
+              title="Nothing here yet"
+              description="Complete a lesson and it will show up here."
+              className="border-0 bg-transparent py-8"
+            />
+          ) : (
+            <ol className="space-y-4">
+              {activities.map((activity) => (
+                <li key={activity.id} className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                      activity.type === 'completion'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                        : 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
+                    }`}
+                  >
+                    {activity.type === 'completion' ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <Activity className="h-4 w-4" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-snug">
+                      {activity.description}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatRelativeTime(activity.timestamp)}
                     </p>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Panel>
       </div>
+
+      {applications.length > 0 && (
+        <Panel
+          title="Your applications"
+          description="Every role you have applied to"
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/opportunities">
+                Find more
+                <ArrowRight />
+              </Link>
+            </Button>
+          }
+        >
+          <ul className="divide-y">
+            {applications.slice(0, 6).map((app) => (
+              <li
+                key={app.id}
+                className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {app.opportunities?.title ?? 'Opportunity'}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {app.opportunities?.company_name ?? '—'}
+                    {app.created_at && ` · applied ${formatRelativeTime(app.created_at)}`}
+                  </p>
+                </div>
+                <StatusBadge status={app.status} />
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
     </>
   )
-
-  if (!user) return <div className="p-6">Loading...</div>
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold">Welcome back, {user.full_name || 'User'}</h1>
-          <p className="text-gray-600">Here's what's happening with your account</p>
+      {/* Greeting */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-balance text-2xl font-bold tracking-tight md:text-3xl">
+            Welcome back{user?.full_name ? `, ${user.full_name}` : ''}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isProvider
+              ? "Here's how your courses and postings are performing."
+              : "Here's what's happening with your learning."}
+          </p>
         </div>
-        {user.role === 'provider' && (
-          <div className="space-x-4">
-            <Button onClick={() => router.push('/dashboard/courses/create')}>
-              Create Course
+
+        {isProvider && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="brand" asChild>
+              <Link href="/dashboard/courses/create">
+                <Plus />
+                Create course
+              </Link>
             </Button>
-            <Button onClick={() => router.push('/dashboard/opportunities/create')}>
-              Post Job
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/opportunities/create">
+                <Briefcase />
+                Post job
+              </Link>
             </Button>
           </div>
         )}
       </div>
 
-      {user.role === 'provider' ? renderProviderDashboard() : renderStudentDashboard()}
+      {isProvider ? providerView : studentView}
     </div>
   )
 }

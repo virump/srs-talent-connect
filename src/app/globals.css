@@ -2,147 +2,295 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
-
-
+/* ============================================================
+   Design tokens
+   Brand: violet/indigo. `--primary` is mapped to the brand ramp
+   so every existing `bg-primary` surface picks up the new identity.
+   ============================================================ */
 @layer base {
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
+
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
+
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
+
+    /* Brand ramp */
+    --brand-50: 250 100% 98%;
+    --brand-100: 251 91% 95%;
+    --brand-200: 251 95% 92%;
+    --brand-300: 252 95% 85%;
+    --brand-400: 255 92% 76%;
+    --brand-500: 258 90% 66%;
+    --brand-600: 262 83% 58%;
+    --brand-700: 263 70% 50%;
+    --brand-800: 263 69% 42%;
+    --brand-900: 264 67% 35%;
+    --brand-950: 261 73% 23%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
+
     --muted: 240 4.8% 95.9%;
     --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+
+    --accent: 251 91% 95%;
+    --accent-foreground: 263 70% 50%;
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 80% 15%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
-    --chart-1: 12 76% 61%;
+    --ring: 262 83% 58%;
+
+    --chart-1: 262 83% 58%;
     --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
+    --chart-3: 199 89% 48%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 330 81% 60%;
+
+    --radius: 0.75rem;
   }
+
   .dark {
-    --background: 240 10% 3.9%;
+    --background: 240 14% 6%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+
+    --card: 240 12% 9%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
+
+    --popover: 240 12% 9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
+
+    --brand-50: 261 73% 23%;
+    --brand-100: 264 67% 35%;
+    --brand-200: 263 69% 42%;
+    --brand-300: 263 70% 50%;
+    --brand-400: 262 83% 58%;
+    --brand-500: 258 90% 66%;
+    --brand-600: 255 92% 76%;
+    --brand-700: 252 95% 85%;
+    --brand-800: 251 95% 92%;
+    --brand-900: 251 91% 95%;
+    --brand-950: 250 100% 98%;
+
+    --primary: 258 90% 66%;
+    --primary-foreground: 261 73% 15%;
+
+    --secondary: 240 6% 15%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
+
+    --muted: 240 6% 15%;
     --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+
+    --accent: 258 30% 20%;
+    --accent-foreground: 252 95% 92%;
+
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    --chart-1: 220 70% 50%;
+
+    --success: 142 69% 42%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 80% 12%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 240 6% 18%;
+    --input: 240 6% 18%;
+    --ring: 258 90% 66%;
+
+    --chart-1: 258 90% 66%;
     --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 330 81% 70%;
   }
 }
-
-
 
 @layer base {
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    /* Avoid layout shift when dialogs lock scroll */
+    scrollbar-gutter: stable;
+  }
+
+  ::selection {
+    @apply bg-primary/25;
+  }
+
+  /* Consistent focus treatment across the app */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Themed scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-[3px] border-solid border-transparent bg-border bg-clip-content;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50 bg-clip-content;
   }
 }
 
-[data-state="open"] .dialog-overlay {
-  backdrop-filter: blur(4px);
-}
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-  animation: overlayShow 150ms cubic-bezier(0.16, 1, 0.3, 1);
-}
+  .text-pretty {
+    text-wrap: pretty;
+  }
 
-.dialog-content {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: white;
-  border-radius: 1rem;
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
-  animation: contentShow 150ms cubic-bezier(0.16, 1, 0.3, 1);
-}
+  /* Gradient brand text */
+  .text-gradient-brand {
+    @apply bg-gradient-to-r from-brand-600 via-brand-500 to-info bg-clip-text text-transparent;
+  }
 
-@keyframes overlayShow {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+  /* Animated multi-stop gradient text */
+  .text-gradient-animated {
+    background-image: linear-gradient(
+      to right,
+      hsl(var(--brand-600)),
+      hsl(var(--info)),
+      hsl(var(--brand-500)),
+      hsl(var(--brand-600))
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gradient-pan 6s linear infinite;
+  }
 
-@keyframes contentShow {
-  from {
+  /* Dotted grid backdrop */
+  .bg-grid-dots {
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      hsl(var(--foreground) / 0.12) 1px,
+      transparent 0
+    );
+    background-size: 24px 24px;
+  }
+
+  /* Soft glow used behind hero elements */
+  .glow-brand {
+    box-shadow: 0 0 0 1px hsl(var(--brand-500) / 0.18),
+      0 8px 40px -8px hsl(var(--brand-600) / 0.45);
+  }
+
+  /* Card lift on hover */
+  .hover-lift {
+    @apply transition-all duration-300 ease-out-expo;
+  }
+
+  .hover-lift:hover {
+    @apply -translate-y-1 shadow-lift;
+  }
+
+  /* Shimmer sweep for skeletons */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.06),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* Staggered reveal helpers — pair with .animate-fade-up */
+  .stagger-children > * {
     opacity: 0;
-    transform: translate(-50%, -48%) scale(0.96);
+    animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
-  to {
+
+  .stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+  .stagger-children > *:nth-child(2) { animation-delay: 0.12s; }
+  .stagger-children > *:nth-child(3) { animation-delay: 0.19s; }
+  .stagger-children > *:nth-child(4) { animation-delay: 0.26s; }
+  .stagger-children > *:nth-child(5) { animation-delay: 0.33s; }
+  .stagger-children > *:nth-child(6) { animation-delay: 0.4s; }
+  .stagger-children > *:nth-child(7) { animation-delay: 0.47s; }
+  .stagger-children > *:nth-child(8) { animation-delay: 0.54s; }
+
+  /* Hide scrollbar but keep scrolling (filter chip rows) */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .stagger-children > * {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
   }
-}
-
-/* Dashboard Layout Styles */
-.dashboard-sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 16rem;
-  overflow-y: auto;
-  z-index: 40;
-  background-color: white;
-  border-right: 1px solid var(--border);
-}
-
-.dashboard-sidebar::-webkit-scrollbar {
-  width: 4px;
-}
-
-.dashboard-sidebar::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
-}
-
-.dashboard-content {
-  margin-left: 16rem;
-  min-height: 100vh;
-  background-color: var(--background);
 }

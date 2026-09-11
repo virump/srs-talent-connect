@@ -1,111 +1,307 @@
 'use client'
-import { useState, useEffect } from 'react'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Button } from "@/components/ui/button"
+import {
+  BriefcaseBusiness,
+  ChevronsLeft,
+  LayoutDashboard,
+  LibraryBig,
+  LogOut,
+  Menu,
+  Settings,
+  UserRound,
+  X,
+} from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import { Tooltip } from '@/components/ui/tooltip'
+import { Skeleton, SkeletonText } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/components/providers/auth-provider'
-import { Menu, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+const navItems = [
+  {
+    href: '/dashboard',
+    label: 'Overview',
+    icon: LayoutDashboard,
+    roles: ['student', 'provider', 'admin'],
+  },
+  { href: '/dashboard/courses', label: 'Courses', icon: LibraryBig, roles: ['student', 'provider'] },
+  {
+    href: '/dashboard/opportunities',
+    label: 'Opportunities',
+    icon: BriefcaseBusiness,
+    roles: ['student', 'provider'],
+  },
+  {
+    href: '/dashboard/profile',
+    label: 'Profile',
+    icon: UserRound,
+    roles: ['student', 'provider', 'admin'],
+  },
+  { href: '/dashboard/admin', label: 'Admin Panel', icon: Settings, roles: ['admin'] },
+]
+
+const COLLAPSE_KEY = 'srs-sidebar-collapsed'
+
+/** Sidebar shape shown while auth resolves — avoids a bare "Loading..." string. */
+function SidebarSkeleton() {
+  return (
+    <div className="flex min-h-screen">
+      <div className="hidden w-64 shrink-0 border-r bg-card p-5 md:block">
+        <div className="flex items-center gap-3">
+          <Skeleton shape="circle" className="h-10 w-10" />
+          <div className="flex-1 space-y-2">
+            <Skeleton shape="text" className="w-24" />
+            <Skeleton shape="text" className="h-3 w-16" />
+          </div>
+        </div>
+        <div className="mt-8 space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 bg-muted/30 p-8">
+        <Skeleton shape="text" className="h-8 w-64" />
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+        <div className="mt-6">
+          <SkeletonText lines={4} />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function DashboardLayout({ children }) {
   const { user, loading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+
+  // Restore the collapsed rail preference.
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === '1')
+  }, [])
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0')
+      } catch {
+        // Non-fatal: the preference just won't persist.
+      }
+      return next
+    })
+  }
+
+  // Close the mobile drawer on navigation.
+  useEffect(() => {
+    setIsSidebarOpen(false)
+  }, [pathname])
+
+  // Close the drawer on Escape.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setIsSidebarOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // Redirect unauthenticated users from an effect, not during render.
+  useEffect(() => {
+    if (!loading && !user) router.push('/auth/login')
+  }, [loading, user, router])
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/auth/login')
+    setSigningOut(true)
+    try {
+      await supabase.auth.signOut()
+      router.push('/auth/login')
+    } catch (error) {
+      console.error('Error signing out:', error)
+      setSigningOut(false)
+    }
   }
 
-  if (loading) return <div>Loading...</div>
-  if (!user) {
-    router.push('/auth/login')
-    return null
-  }
+  if (loading) return <SidebarSkeleton />
+  if (!user) return <SidebarSkeleton />
 
-  const navItems = [
-    { href: '/dashboard', label: 'Overview', icon: '📊', roles: ['student', 'provider', 'admin'] },
-    { href: '/dashboard/courses', label: 'Courses', icon: '📚', roles: ['student', 'provider'] },
-    { href: '/dashboard/opportunities', label: 'Opportunities', icon: '💼', roles: ['student', 'provider'] },
-    { href: '/dashboard/profile', label: 'Profile', icon: '👤', roles: ['student', 'provider', 'admin'] },
-    { href: '/dashboard/admin', label: 'Admin Panel', icon: '⚙️', roles: ['admin'] }
-  ]
-
-  const filteredNavItems = navItems.filter(item => 
-    user?.role && item.roles.includes(user.role)
+  const filteredNavItems = navItems.filter(
+    (item) => user?.role && item.roles.includes(user.role)
   )
 
+  const avatarSrc = user?.avatar_url
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${user.avatar_url}`
+    : null
+
+  const isActive = (href) =>
+    href === '/dashboard' ? pathname === href : pathname?.startsWith(href)
+
+  const sidebarWidth = collapsed ? 'md:w-[4.5rem]' : 'md:w-64'
+
   return (
-    <div className="min-h-screen flex">
-      {/* Overlay for mobile sidebar */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+    <div className="flex min-h-screen bg-muted/30">
+      {/* Mobile scrim */}
+      <div
+        aria-hidden="true"
+        onClick={() => setIsSidebarOpen(false)}
+        className={cn(
+          'fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm transition-opacity duration-300 md:hidden',
+          isSidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
+      />
 
       {/* Sidebar */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r shadow-sm overflow-y-auto transition-transform duration-200
-        md:translate-x-0 md:static
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="p-6 flex flex-col h-full">
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-800">Welcome,</h2>
-            <p className="text-gray-600">{user?.full_name}</p>
-            <div className="mt-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm inline-block">
-              {user.role}
-            </div>
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-card transition-all duration-300 ease-out-expo md:sticky md:top-0 md:h-screen md:translate-x-0',
+          sidebarWidth,
+          isSidebarOpen ? 'translate-x-0 shadow-lift' : '-translate-x-full'
+        )}
+      >
+        {/* User card */}
+        <div className={cn('flex items-center gap-3 border-b p-4', collapsed && 'md:justify-center')}>
+          <Avatar src={avatarSrc} name={user.full_name || user.email} size="md" status="online" />
+          <div className={cn('min-w-0 flex-1', collapsed && 'md:hidden')}>
+            <p className="truncate text-sm font-semibold">{user.full_name || 'Your account'}</p>
+            {user.role && (
+              <Badge variant="brand" className="mt-1 capitalize">
+                {user.role}
+              </Badge>
+            )}
           </div>
-          <nav className="space-y-2 flex-grow">
-            {filteredNavItems.map(item => (
-              <Link key={item.href} href={item.href}>
-                <Button
-                  variant={pathname === item.href ? "default" : "ghost"}
-                  className={`w-full justify-start text-left ${
-                    pathname === item.href
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="mr-2">{item.icon}</span>
-                  {item.label}
-                </Button>
-              </Link>
-            ))}
-          </nav>
-          <div className="pt-4 mt-auto border-t">
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-              onClick={handleSignOut}
-            >
-              <span className="mr-2">🚪</span>
-              Sign Out
-            </Button>
-          </div>
+          <button
+            type="button"
+            aria-label="Close sidebar"
+            onClick={() => setIsSidebarOpen(false)}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 min-h-screen bg-gray-50">
-        {/* Mobile header with menu button */}
-        <div className="sticky top-0 z-10 md:hidden bg-white border-b p-4">
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+          {filteredNavItems.map((item) => {
+            const active = isActive(item.href)
+            return (
+              <Tooltip
+                key={item.href}
+                content={collapsed ? item.label : null}
+                side="right"
+                delay={100}
+                wrapperClassName="w-full"
+              >
+                <Link
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                    collapsed && 'md:justify-center md:px-0',
+                    active
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  )}
+                >
+                  {/* Active rail marker */}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-primary transition-all duration-300 ease-out-expo',
+                      active ? 'opacity-100' : 'scale-y-0 opacity-0'
+                    )}
+                  />
+                  <item.icon
+                    className={cn(
+                      'h-[18px] w-[18px] shrink-0 transition-transform duration-200',
+                      !active && 'group-hover:scale-110'
+                    )}
+                  />
+                  <span className={cn('truncate', collapsed && 'md:hidden')}>{item.label}</span>
+                </Link>
+              </Tooltip>
+            )
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className="space-y-1 border-t p-3">
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={cn(
+              'hidden w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:flex',
+              collapsed && 'md:justify-center md:px-0'
+            )}
+          >
+            <ChevronsLeft
+              className={cn(
+                'h-[18px] w-[18px] shrink-0 transition-transform duration-300 ease-out-expo',
+                collapsed && 'rotate-180'
+              )}
+            />
+            <span className={cn(collapsed && 'md:hidden')}>Collapse</span>
+          </button>
+
+          <Tooltip
+            content={collapsed ? 'Sign out' : null}
+            side="right"
+            delay={100}
+            wrapperClassName="w-full"
+          >
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60',
+                collapsed && 'md:justify-center md:px-0'
+              )}
+            >
+              <LogOut className="h-[18px] w-[18px] shrink-0" />
+              <span className={cn(collapsed && 'md:hidden')}>
+                {signingOut ? 'Signing out…' : 'Sign Out'}
+              </span>
+            </button>
+          </Tooltip>
+        </div>
+      </aside>
+
+      {/* Main column */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile bar */}
+        <div className="sticky top-0 z-30 flex items-center gap-3 border-b bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden">
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            aria-label="Open sidebar"
+            onClick={() => setIsSidebarOpen(true)}
           >
             <Menu className="h-5 w-5" />
           </Button>
+          <span className="font-semibold">Dashboard</span>
         </div>
 
-        <div className="p-4 md:p-8">
-          {children}
-        </div>
+        <main className="min-w-0 flex-1 p-4 md:p-8">
+          <div key={pathname} className="animate-fade-up">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   )
